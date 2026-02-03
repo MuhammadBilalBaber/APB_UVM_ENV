@@ -12,7 +12,7 @@ class apb_monitor #(int ADDR_WIDTH=256, int DATA_WIDTH=256) extends uvm_monitor;
 
   apb_seq_item#(ADDR_WIDTH, DATA_WIDTH) trans;
     
-  uvm_analysis_port#(apb_seq_item) apb_mon_port;
+  uvm_analysis_port#(apb_seq_item#(ADDR_WIDTH, DATA_WIDTH)) apb_mon_port;
 
    // Constructor
 
@@ -59,6 +59,8 @@ class apb_monitor #(int ADDR_WIDTH=256, int DATA_WIDTH=256) extends uvm_monitor;
     `uvm_info(get_type_name(), $sformatf("The pready is %0d",  trans.pready),  UVM_LOW);
     `uvm_info(get_type_name(), $sformatf("The pslver is %0d",  trans.pslver),  UVM_LOW);
     
+    apb_mon_port.write(trans);
+
     @(posedge apb_intf.clock);
     @(posedge apb_intf.clock);
     
