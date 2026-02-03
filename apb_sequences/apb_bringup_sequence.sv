@@ -1,4 +1,5 @@
-
+`include "uvm_macros.svh"
+import uvm_pkg::*;
 class apb_bringup_sequence extends uvm_sequence #(apb_seq_item);
 
   // factory Registration

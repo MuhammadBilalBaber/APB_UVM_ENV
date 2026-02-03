@@ -1,4 +1,5 @@
-
+`include "uvm_macros.svh"
+import uvm_pkg::*;
 class apb_environment extends uvm_env;
 
   // factory Registration
@@ -13,8 +14,8 @@ class apb_environment extends uvm_env;
 
   // Constructor
 
-  function new(string name = "apb_environment", uvm_compponent parent = null);
-    super.new(name. parent);
+  function new(string name = "apb_environment", uvm_component parent = null);
+    super.new(name, parent);
   endfunction: new
 
   // Build Phase

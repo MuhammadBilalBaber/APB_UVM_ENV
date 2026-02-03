@@ -43,4 +43,7 @@ module apb_tb_top;
 
   initial begin
     uvm_config_db#(virtual apb_interface)::set(null,"uvm_test_top.apb_env.apb_agnt.*","apb_intf",apb_intf);
+    run_test("apb_bring_up_test")
   end 
+
+endmodule : apb_tb_top

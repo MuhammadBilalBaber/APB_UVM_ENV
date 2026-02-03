@@ -1,3 +1,5 @@
+`include "uvm_macros.svh"
+import uvm_pkg::*;
 class apb_bring_up_test extends uvm_test;
   
   // Factory registration
