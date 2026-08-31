@@ -1,69 +1,76 @@
-`include "uvm_macros.svh"
-import uvm_pkg::*;
-class apb_monitor #(int ADDR_WIDTH=256, int DATA_WIDTH=256) extends uvm_monitor;
+//------------------------------------------------------------------------------
+// APB monitor.
+//
+// Samples the bus on every clock through the passive clocking block and
+// publishes one item per completed transfer (PSEL & PENABLE & PREADY).
+//------------------------------------------------------------------------------
 
-  typedef apb_monitor #(ADDR_WIDTH, DATA_WIDTH) apb_monitor;
+class apb_monitor #(
+  int ADDR_WIDTH = 32,
+  int DATA_WIDTH = 32
+) extends uvm_monitor;
 
-  // Factor registration
+  `uvm_component_param_utils(apb_monitor#(ADDR_WIDTH, DATA_WIDTH))
 
-  `uvm_component_utils(apb_monitor)
+  typedef apb_seq_item #(ADDR_WIDTH, DATA_WIDTH) apb_item_t;
+  typedef apb_config   #(ADDR_WIDTH, DATA_WIDTH) apb_config_t;
 
-  virtual apb_interface apb_intf;
+  apb_config_t                                    cfg;
+  virtual apb_interface #(ADDR_WIDTH, DATA_WIDTH) vif;
 
-  apb_seq_item#(ADDR_WIDTH, DATA_WIDTH) trans;
-    
-  uvm_analysis_port#(apb_seq_item#(ADDR_WIDTH, DATA_WIDTH)) apb_mon_port;
+  uvm_analysis_port #(apb_item_t) apb_mon_port;
 
-   // Constructor
+  int unsigned num_transfers;
 
-  function new(string name ="apb_monitor", uvm_component parent = null);
+  function new(string name = "apb_monitor", uvm_component parent = null);
     super.new(name, parent);
+    apb_mon_port = new("apb_mon_port", this);
   endfunction : new
 
-    // Build Phase
-
-  virtual function void build_phase (uvm_phase phase);
+  virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-      if(!uvm_config_db#(virtual apb_interface)::get(this, "", "apb_intf", apb_intf)) 	
-        `uvm_fatal(get_type_name(), "Interface cannot be accessed in Monitor")
-	  apb_mon_port = new("apb_mon_port",this);
+    if (!uvm_config_db #(apb_config_t)::get(this, "", "cfg", cfg))
+      `uvm_fatal(get_type_name(), "apb_config not found in the configuration database")
+    if (cfg.vif == null)
+      `uvm_fatal(get_type_name(), "apb_config.vif is null")
+    vif = cfg.vif;
   endfunction : build_phase
 
-    // Task run Phase
+  virtual task run_phase(uvm_phase phase);
+    forever collect_trans();
+  endtask : run_phase
 
-  task run_phase (uvm_phase phase);
-    forever begin
-	    collect_trans();
-	  end
-  endtask: run_phase
+  virtual task collect_trans();
+    apb_item_t trans;
 
-  task collect_trans();
-    trans =  apb_seq_item#(ADDR_WIDTH, DATA_WIDTH)::type_id::create("trans",this);
-	  // waitfapb intf.pready):
-      wait (apb_intf.penable && apb_intf.pready && apb_intf.psel);
-	  trans.psel    = apb_intf.psel;
-	  trans.paddr   = apb_intf.paddr;
-	  trans.pwdata  = apb_intf.pwdata;
-	  trans.pwrite  = apb_intf.pwrite;
-	  trans.penable = apb_intf.penable;
-	  trans.prdata  = apb_intf.prdata;
-	  trans.pready  = apb_intf.pready;
-	  trans.pslver  = apb_intf.pslverr;
-    // (posedge apb intf.clock):
-    `uvm_info(get_type_name(), $sformatf("The psel is %0d",    trans.psel),    UVM_LOW);
-    `uvm_info(get_type_name(), $sformatf("The paddr is %0d",   trans.paddr),   UVM_LOW);
-    `uvm_info(get_type_name(), $sformatf("The pwdata is %0d",  trans.pwdata),  UVM_LOW);
-    `uvm_info(get_type_name(), $sformatf("The pwrite is %0d",  trans.pwrite),  UVM_LOW);
-    `uvm_info(get_type_name(), $sformatf("The penable is %0d", trans.penable), UVM_LOW);
-    `uvm_info(get_type_name(), $sformatf("The prdata is %0d",  trans.prdata),  UVM_LOW);
-    `uvm_info(get_type_name(), $sformatf("The pready is %0d",  trans.pready),  UVM_LOW);
-    `uvm_info(get_type_name(), $sformatf("The pslver is %0d",  trans.pslver),  UVM_LOW);
-    
+    @(vif.mon_cb);
+
+    if (vif.presetn !== 1'b1)
+      return;
+
+    if (!(vif.mon_cb.psel === 1'b1 && vif.mon_cb.penable === 1'b1 && vif.mon_cb.pready === 1'b1))
+      return;
+
+    trans = apb_item_t::type_id::create("trans");
+
+    trans.paddr   = vif.mon_cb.paddr;
+    trans.pwrite  = vif.mon_cb.pwrite;
+    trans.pwdata  = vif.mon_cb.pwdata;
+    trans.prdata  = vif.mon_cb.pwrite ? '0 : vif.mon_cb.prdata;
+    trans.pslverr = vif.mon_cb.pslverr;
+    trans.psel    = vif.mon_cb.psel;
+    trans.penable = vif.mon_cb.penable;
+    trans.pready  = vif.mon_cb.pready;
+
+    num_transfers++;
+
+    `uvm_info(get_type_name(), {"observed ", trans.convert2string()}, UVM_MEDIUM)
+
     apb_mon_port.write(trans);
-
-    @(posedge apb_intf.clock);
-    @(posedge apb_intf.clock);
-    
   endtask : collect_trans
-      
+
+  virtual function void report_phase(uvm_phase phase);
+    `uvm_info(get_type_name(), $sformatf("observed %0d APB transfers", num_transfers), UVM_LOW)
+  endfunction : report_phase
+
 endclass : apb_monitor

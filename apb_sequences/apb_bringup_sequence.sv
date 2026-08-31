@@ -1,33 +1,31 @@
-`include "uvm_macros.svh"
-import uvm_pkg::*;
-class apb_bringup_sequence extends uvm_sequence #(apb_seq_item);
+//------------------------------------------------------------------------------
+// Bring-up write sequence: a burst of writes into the legal address window.
+//------------------------------------------------------------------------------
 
-  // factory Registration
+class apb_bringup_sequence #(
+  int ADDR_WIDTH = 32,
+  int DATA_WIDTH = 32
+) extends apb_base_sequence #(ADDR_WIDTH, DATA_WIDTH);
 
-  `uvm_object_utils(apb_bringup_sequence)
-
-  // Constructor
+  `uvm_object_param_utils(apb_bringup_sequence#(ADDR_WIDTH, DATA_WIDTH))
 
   function new(string name = "apb_bringup_sequence");
     super.new(name);
   endfunction : new
 
-  task body();
-    write_data();
-  endtask: body
+  virtual task body();
+    get_cfg();
+    `uvm_info(get_type_name(), $sformatf("starting %0d write transfers", num_trans), UVM_LOW)
+    repeat (num_trans)
+      write_data();
+  endtask : body
 
-  task write_data();
-    req = apb_seq_item::type_id::create("req");
-    repeat(1) begin
+  virtual task write_data();
+    req = new_item("req");
     start_item(req);
-     assert(req.randomize() with {
-       req.psel   == 1;
-       req.pwrite == 1;
-       req.paddr  == 'h15;
-     });
-     finish_item(req);
-    end
+    if (!req.randomize() with { pwrite == 1'b1; })
+      `uvm_fatal(get_type_name(), "randomization of a write transfer failed")
+    finish_item(req);
   endtask : write_data
-
 
 endclass : apb_bringup_sequence
