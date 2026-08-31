@@ -8,7 +8,9 @@
 +incdir+${APB_ROOT}/apb_sequences
 +incdir+${APB_ROOT}/apb_tests
 
-// Design units first: the package below refers to the interface type.
+// Design units first: the class package below refers to the interface type.
+${APB_ROOT}/apb_protocol_checker.sv
+${APB_ROOT}/apb_protocol_checker_bind.sv
 ${APB_ROOT}/apb_interface.sv
 ${APB_ROOT}/apb_dut.sv
 

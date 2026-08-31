@@ -1,0 +1,23 @@
+# Simulator build output
+obj_dir/
+simv
+simv.daidir/
+csrc/
+ucli.key
+vc_hdrs.h
+work/
+transcript
+xcelium.d/
+xrun.log
+INCA_libs/
+novas.*
+verdi*
+*.vpd
+*.vcd
+*.fsdb
+urgReport/
+simv.vdb/
+.simvision/
+
+# Fetched by apb_script/compile_check.sh
+uvm-core/

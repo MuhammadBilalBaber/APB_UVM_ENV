@@ -29,7 +29,9 @@ module apb_s #(
   localparam int ADDR_LSB       = $clog2(BYTES_PER_WORD);
   localparam int INDEX_WIDTH    = $clog2(MEM_DEPTH);
 
-  localparam logic [ADDR_WIDTH-1:0] ALIGN_MASK = BYTES_PER_WORD - 1;
+  // Low ADDR_LSB bits set. Built by shifting rather than from BYTES_PER_WORD-1
+  // so that every operand is already ADDR_WIDTH bits wide.
+  localparam logic [ADDR_WIDTH-1:0] ALIGN_MASK = ~({ADDR_WIDTH{1'b1}} << ADDR_LSB);
 
   if (DATA_WIDTH < 8 || (DATA_WIDTH % 8) != 0)
     $error("apb_s: DATA_WIDTH (%0d) must be a multiple of 8 and at least 8", DATA_WIDTH);
@@ -46,7 +48,11 @@ module apb_s #(
 
   wire addr_unknown   = $isunknown(paddr);
   wire addr_unaligned = |(paddr & ALIGN_MASK);
-  wire addr_oor       = (paddr >> ADDR_LSB) >= MEM_DEPTH;
+  // Any address bit above the addressable window means out of range. Testing
+  // the bits rather than comparing against MEM_DEPTH keeps this correct when the
+  // memory happens to cover the entire address space, where the comparison
+  // constant would need one bit more than PADDR has.
+  wire addr_oor       = |(paddr >> (ADDR_LSB + INDEX_WIDTH));
   wire data_unknown   = pwrite && $isunknown(pwdata);
 
   wire transfer_err = addr_unknown | addr_unaligned | addr_oor | data_unknown;
@@ -73,12 +79,14 @@ module apb_s #(
     end
   end
 
-  // Reset clears the model so that a read of a never-written location returns a
-  // defined value rather than X, which keeps the scoreboard prediction simple.
-  always_ff @(posedge pclk or negedge presetn) begin
-    if (!presetn)
-      foreach (mem[i]) mem[i] <= '0;
-    else if (accept && pwrite && !transfer_err)
+  // Starting from a known image means a read of a never-written location returns
+  // a defined value rather than X, which keeps the scoreboard prediction simple.
+  initial begin
+    foreach (mem[i]) mem[i] = '0;
+  end
+
+  always @(posedge pclk) begin
+    if (presetn && accept && pwrite && !transfer_err)
       mem[word_idx] <= pwdata;
   end
 

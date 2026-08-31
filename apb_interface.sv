@@ -24,9 +24,9 @@ interface apb_interface #(
   logic                  pready;
   logic                  pslverr;
 
-  // Requester (master) view: outputs are driven in the NBA region of the
-  // clock edge, inputs are sampled just before it, so the driver can never
-  // race with the DUT.
+  // Requester (master) view: outputs are driven in the NBA region of the clock
+  // edge and inputs are sampled just before it, so the driver can never race
+  // with the completer.
   clocking mst_cb @(posedge pclk);
     default input #1step output #0;
     output paddr, psel, penable, pwrite, pwdata;
@@ -39,53 +39,8 @@ interface apb_interface #(
     input paddr, psel, penable, pwrite, pwdata, prdata, pready, pslverr;
   endclocking
 
-  modport mst_mp (clocking mst_cb, input pclk, input presetn);
-  modport mon_mp (clocking mon_cb, input pclk, input presetn);
-
-`ifndef APB_NO_ASSERTIONS
-
-  wire setup_phase  = psel && !penable;
-  wire access_phase = psel && penable;
-
-  // A SETUP phase always lasts exactly one cycle and is followed by ACCESS.
-  property p_setup_to_access;
-    @(posedge pclk) disable iff (!presetn) setup_phase |=> access_phase;
-  endproperty
-
-  // PENABLE is only ever asserted together with PSEL.
-  property p_penable_implies_psel;
-    @(posedge pclk) disable iff (!presetn) penable |-> psel;
-  endproperty
-
-  // Control and payload must hold still for the whole ACCESS phase, i.e. while
-  // the completer is inserting wait states.
-  property p_stable_during_wait;
-    @(posedge pclk) disable iff (!presetn)
-      (access_phase && !pready) |=> ($stable(paddr) && $stable(pwrite) &&
-                                     $stable(pwdata) && $stable(psel) && $stable(penable));
-  endproperty
-
-  // PREADY is only meaningful during an ACCESS phase.
-  property p_pready_in_access;
-    @(posedge pclk) disable iff (!presetn) pready |-> access_phase;
-  endproperty
-
-  // PSLVERR is only valid on a completing transfer.
-  property p_pslverr_with_pready;
-    @(posedge pclk) disable iff (!presetn) (access_phase && pslverr) |-> pready;
-  endproperty
-
-  a_setup_to_access     : assert property (p_setup_to_access)
-    else $error("APB_IF: SETUP phase was not followed by an ACCESS phase");
-  a_penable_implies_psel: assert property (p_penable_implies_psel)
-    else $error("APB_IF: PENABLE asserted while PSEL is low");
-  a_stable_during_wait  : assert property (p_stable_during_wait)
-    else $error("APB_IF: control/payload changed during a wait state");
-  a_pready_in_access    : assert property (p_pready_in_access)
-    else $error("APB_IF: PREADY asserted outside of an ACCESS phase");
-  a_pslverr_with_pready : assert property (p_pslverr_with_pready)
-    else $error("APB_IF: PSLVERR asserted without PREADY");
-
-`endif
+  // The protocol assertions live in apb_protocol_checker and are attached with
+  // a bind statement (see apb_protocol_checker_bind.sv): an interface is not
+  // allowed to instantiate a module directly.
 
 endinterface : apb_interface

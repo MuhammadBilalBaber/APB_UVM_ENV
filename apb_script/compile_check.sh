@@ -37,7 +37,9 @@ apb_root, uvm_src = sys.argv[1], sys.argv[2]
 
 incdirs = ["apb_sequence_item", "apb_config", "apb_agent",
            "apb_env", "apb_sequences", "apb_tests"]
-sources = ["apb_interface.sv",
+sources = ["apb_protocol_checker.sv",
+           "apb_protocol_checker_bind.sv",
+           "apb_interface.sv",
            "apb_dut.sv",
            "apb_packages/apb_param_pkg.sv",
            "apb_packages/apb_pkg.sv",
