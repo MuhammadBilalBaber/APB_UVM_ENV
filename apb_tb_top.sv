@@ -23,7 +23,9 @@ module apb_tb_top;
 
   initial begin
     presetn = 1'b0;
-    repeat (5) @(posedge pclk);
+    // Released off the active edge so the completer's asynchronous reset can
+    // never race with a clock edge.
+    repeat (5) @(negedge pclk);
     presetn = 1'b1;
   end
 
