@@ -147,25 +147,44 @@ module apb_master_check #(
     transfer(addr, 1'b0, '0, rdata, slverr);
     check("last legal word reads back all ones", rdata === wdata);
 
-    // First word past the end must report PSLVERR.
+    // First word past the end must report PSLVERR. Dropping the top address
+    // bits aliases such an address onto word 0, so word 0 is seeded first and
+    // re-read afterwards: an errored write must not reach the memory.
     if ((MAX_ADDR + longint'(BYTES)) <= ((longint'(1) << ADDR_WIDTH) - 1)) begin
+      wdata = DATA_WIDTH'('h5A);
+      transfer(ADDR_WIDTH'(0), 1'b1, wdata, rdata, slverr);
+      check("seeding word 0 is accepted", slverr == 1'b0);
+
       addr = ADDR_WIDTH'(MAX_ADDR + longint'(BYTES));
       transfer(addr, 1'b1, '1, rdata, slverr);
       check("write past the end reports PSLVERR", slverr == 1'b1);
       transfer(addr, 1'b0, '0, rdata, slverr);
       check("read past the end reports PSLVERR", slverr == 1'b1);
       check("read past the end returns 0", rdata == '0);
+
+      transfer(ADDR_WIDTH'(0), 1'b0, '0, rdata, slverr);
+      check("word 0 is still readable after the rejected write", slverr == 1'b0);
+      check($sformatf("rejected out-of-range write left word 0 at 0x%0h (got 0x%0h)",
+                      wdata, rdata), rdata === wdata);
     end
 
-    // Unaligned access must report PSLVERR and leave the word untouched.
+    // An unaligned access must report PSLVERR and leave the word it aliases
+    // onto untouched.
     if (BYTES > 1) begin
+      wdata = DATA_WIDTH'('h3C);
+      transfer(ADDR_WIDTH'(BYTES), 1'b1, wdata, rdata, slverr);
+      check("seeding word 1 is accepted", slverr == 1'b0);
+
       addr = ADDR_WIDTH'(BYTES) + ADDR_WIDTH'(1);
       transfer(addr, 1'b1, '1, rdata, slverr);
       check("unaligned write reports PSLVERR", slverr == 1'b1);
       transfer(addr, 1'b0, '0, rdata, slverr);
       check("unaligned read reports PSLVERR", slverr == 1'b1);
+
       transfer(ADDR_WIDTH'(BYTES), 1'b0, '0, rdata, slverr);
-      check("word targeted by a rejected unaligned write is untouched", slverr == 1'b0);
+      check("word 1 is still readable after the rejected write", slverr == 1'b0);
+      check($sformatf("rejected unaligned write left word 1 at 0x%0h (got 0x%0h)",
+                      wdata, rdata), rdata === wdata);
     end
 
     // Back-to-back transfers: the case a combinational completer gets wrong.
