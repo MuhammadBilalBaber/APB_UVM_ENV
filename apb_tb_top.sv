@@ -1,49 +1,76 @@
-
+//------------------------------------------------------------------------------
+// Testbench top.
+//
+// Elaborates one interface + completer pair per entry in apb_param_pkg and
+// publishes each virtual interface under its own configuration database key.
+// Adding another APB instance is a single line in apb_param_pkg.
+//------------------------------------------------------------------------------
 
 `include "uvm_macros.svh"
-import uvm_pkg::*;
-
-import apb_param_pkg::*;
 
 module apb_tb_top;
 
+  import uvm_pkg::*;
+  import apb_pkg::*;
+  import apb_param_pkg::*;
 
-  // Clock and reset signal
+  localparam time CLK_PERIOD = 10ns;
 
-  bit clock;
-  bit reset;
+  bit   pclk;
+  logic presetn;
 
-  always #5 clock = ~clock;
+  always #(CLK_PERIOD / 2) pclk = ~pclk;
 
   initial begin
-    reset = 0;
-    @(posedge clock);
-    @(posedge clock);
-    reset = 1;
+    presetn = 1'b0;
+    // Released off the active edge so the completer's asynchronous reset can
+    // never race with a clock edge.
+    repeat (5) @(negedge pclk);
+    presetn = 1'b1;
   end
 
-  // Interface
+  for (genvar i = 0; i < NUM_APB; i++) begin : apb_inst
 
-  apb_interface #(.ADDR_WIDTH(ADDR_W), .DATA_WIDTH(DATA_W)) apb_intf(clock, reset);
+    apb_interface #(
+      .ADDR_WIDTH (APB_ADDR_W[i]),
+      .DATA_WIDTH (APB_DATA_W[i])
+    ) apb_intf (
+      .pclk    (pclk),
+      .presetn (presetn)
+    );
 
-  // APB DUT
+    apb_s #(
+      .ADDR_WIDTH (APB_ADDR_W[i]),
+      .DATA_WIDTH (APB_DATA_W[i]),
+      .MEM_DEPTH  (APB_MEM_DEPTH[i])
+    ) apb_completer (
+      .pclk    (pclk),
+      .presetn (presetn),
+      .paddr   (apb_intf.paddr),
+      .psel    (apb_intf.psel),
+      .penable (apb_intf.penable),
+      .pwrite  (apb_intf.pwrite),
+      .pwdata  (apb_intf.pwdata),
+      .prdata  (apb_intf.prdata),
+      .pready  (apb_intf.pready),
+      .pslverr (apb_intf.pslverr)
+    );
 
-  apb_s #(.ADDR_WIDTH(ADDR_W), .DATA_WIDTH(DATA_W)) apb_s(
-     .pclk     (clock),
-     .presetn  (reset),
-     .psel     (apb_intf.psel),     
-     .paddr    (apb_intf.paddr),
-     .pwdata   (apb_intf.pwdata),
-     .pwrite   (apb_intf.pwrite),
-     .pready   (apb_intf.pready),
-     .penable  (apb_intf.penable),
-     .prdata   (apb_intf.prdata),
-     .pslverr  (apb_intf.pslverr)
-  );
+    // The virtual interface type is specialized per instance, so this set() is
+    // type-checked against the matching apb_env specialization on the get side.
+    initial begin
+      uvm_config_db #(virtual apb_interface #(APB_ADDR_W[i], APB_DATA_W[i]))::set(
+        null, "*", apb_vif_key(i), apb_intf);
+    end
+
+  end : apb_inst
 
   initial begin
-    uvm_config_db#(virtual apb_interface)::set(null,"uvm_test_top.apb_env.apb_agnt.*","apb_intf",apb_intf);
-    run_test("apb_bring_up_test")
-  end 
+    $timeformat(-9, 0, " ns", 10);
+    // The #0 lets every apb_inst[*] initial block publish its virtual
+    // interface before the test's build_phase goes looking for it.
+    #0;
+    run_test();
+  end
 
 endmodule : apb_tb_top
